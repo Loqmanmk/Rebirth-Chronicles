@@ -33,6 +33,7 @@ export class UIScene extends Phaser.Scene {
   private statsPanel!: Phaser.GameObjects.Container;
   private statsText!: Phaser.GameObjects.Text;
   private dialogue!: DialogueBox;
+  private savedNote!: Phaser.GameObjects.Text;
 
   constructor() {
     super('UI');
@@ -192,6 +193,19 @@ export class UIScene extends Phaser.Scene {
       .setAlpha(0);
     this.game.events.on('toast', this.showToast, this);
 
+    // small note when the game saves itself
+    this.savedNote = this.add
+      .text(width - 16, height - 14, 'Game saved', {
+        fontFamily: FONT,
+        fontSize: '13px',
+        color: '#c8c8d4',
+        stroke: '#1a1420',
+        strokeThickness: 3,
+      })
+      .setOrigin(1, 1)
+      .setAlpha(0);
+    this.game.events.on('saved', this.showSaved, this);
+
     // conversations
     this.dialogue = new DialogueBox(this, {
       xp: (amount) => this.game.events.emit('story-xp', amount),
@@ -204,12 +218,19 @@ export class UIScene extends Phaser.Scene {
       this.registry.events.off('changedata-maxHp', this.drawHearts, this);
       this.game.events.off('toast', this.showToast, this);
       this.game.events.off('dialogue-start', this.startDialogue, this);
+      this.game.events.off('saved', this.showSaved, this);
       this.game.events.off('mana-fail', this.flashMana, this);
       this.registry.events.off('changedata-level', this.drawProgress, this);
       this.registry.events.off('changedata-xp', this.drawProgress, this);
       this.registry.events.off('changedata-knownSpells', this.drawSpells, this);
       this.registry.events.off('changedata-selectedSpell', this.drawSpells, this);
     });
+  }
+
+  private showSaved(): void {
+    this.tweens.killTweensOf(this.savedNote);
+    this.savedNote.setAlpha(0);
+    this.tweens.add({ targets: this.savedNote, alpha: 0.9, duration: 300, hold: 1200, yoyo: true });
   }
 
   private startDialogue(npcId: string): void {

@@ -5,6 +5,7 @@ import { Slime } from '../entities/Slime';
 import { SpellCaster, type HitOptions } from '../magic/SpellCaster';
 import { memory } from '../story/memory';
 import { SPELL_BY_ID, type SpellDef, type SpellId } from '../magic/spells';
+import { readSave, writeSave } from '../systems/save';
 import { MAP_H, MAP_W, buildVillage } from '../world/villageMap';
 
 const ZOOM = 3;
@@ -12,6 +13,7 @@ const SLIME_TOUCH_DAMAGE = 1;
 const SLIME_XP = 5;
 const SHRINE_XP = 10;
 const TALK_RANGE = 24;
+const AUTOSAVE_EVERY = 20000; // ms
 
 interface Npc {
   id: string;
@@ -39,9 +41,15 @@ export class VillageScene extends Phaser.Scene {
   private talkPrompt!: Phaser.GameObjects.Text;
   private talkKey!: Phaser.Input.Keyboard.Key;
   private nextTalkAt = 0;
+  private loadOnStart = false;
 
   constructor() {
     super('Village');
+  }
+
+  /** Called by the title screen: { load: true } continues the saved game. */
+  init(data: { load?: boolean }): void {
+    this.loadOnStart = Boolean(data?.load);
   }
 
   create(): void {
@@ -96,6 +104,7 @@ export class VillageScene extends Phaser.Scene {
     const onClose = () => {
       this.player.busy = false;
       this.nextTalkAt = this.time.now + 300;
+      this.saveGame();
     };
     const onXp = (amount: number) => this.giveXp(amount, this.player.x, this.player.y - 8);
     const onHeal = () => {
@@ -117,6 +126,9 @@ export class VillageScene extends Phaser.Scene {
     this.physics.add.collider(this.player, ground);
     this.physics.add.collider(this.player, solids);
     this.player.on('died', () => this.onPlayerDied());
+    const save = this.loadOnStart ? readSave() : null;
+    if (save) this.player.restore(save.player);
+    this.time.addEvent({ delay: AUTOSAVE_EVERY, loop: true, callback: () => this.saveGame() });
 
     // --- enemies
     this.slimes = village.slimeSpawns.map((p) => new Slime(this, p.x, p.y));
@@ -155,6 +167,7 @@ export class VillageScene extends Phaser.Scene {
     this.shrines = village.shrines.map(({ spell, x, y }) => {
       this.add.image(x, y, 'pedestal').setOrigin(0.5, 1).setDepth(y - 6);
       const icon = this.add.image(x, y - 16, 'elements', spell).setDepth(y + 20);
+      if (this.player.known.has(spell)) icon.setVisible(false); // already learned (loaded game)
       this.tweens.add({
         targets: icon,
         y: icon.y - 3,
@@ -234,6 +247,7 @@ export class VillageScene extends Phaser.Scene {
       });
       this.hitSparks.explode(14, shrine.x, shrine.y - 12);
       this.giveXp(SHRINE_XP, shrine.x, shrine.y - 20);
+      this.saveGame();
       this.game.events.emit(
         'toast',
         `You learned ${spell.name}!  (${spell.element} magic)\n${spell.description}`,
@@ -281,6 +295,13 @@ export class VillageScene extends Phaser.Scene {
     const lines = ['Level ' + level + '!   You are now ' + this.registry.get('age') + ' years old.'];
     if (stageChanged) lines.push('A new stage of life begins: ' + p.stage + '.');
     this.game.events.emit('toast', lines.join(String.fromCharCode(10)));
+    this.saveGame();
+  }
+
+  /** Write the game to the browser. Happens by itself: after talking, levelling, learning... */
+  private saveGame(): void {
+    if (this.player.dead) return;
+    if (writeSave(this.player.toSave(), memory.toJSON())) this.game.events.emit('saved');
   }
 
   /** Damage every slime touched by the current sword swing (once per swing). */
@@ -306,6 +327,7 @@ export class VillageScene extends Phaser.Scene {
       for (const slime of this.slimes) if (slime.alive) slime.respawn();
       cam.fadeIn(900, 0, 0, 0);
       this.game.events.emit('toast', 'You fainted... Mother carried you home.');
+      this.saveGame();
     });
   }
 }

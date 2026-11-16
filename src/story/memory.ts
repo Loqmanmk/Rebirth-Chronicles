@@ -47,6 +47,13 @@ export class Memory {
     this.affinity[npc] = this.likes(npc) + amount;
   }
 
+  /** forget everything (new game) */
+  reset(): void {
+    this.flags = {};
+    this.affinity = {};
+    this.counters = { slimesKilled: 0, fainted: 0 };
+  }
+
   toJSON(): MemoryData {
     return { flags: this.flags, affinity: this.affinity, counters: this.counters };
   }

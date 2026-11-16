@@ -9,6 +9,7 @@ import {
   xpToNext,
   type Stage,
 } from '../systems/progression';
+import type { PlayerSave } from '../systems/save';
 
 export type Facing = 'down' | 'up' | 'left' | 'right';
 
@@ -202,6 +203,44 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       onComplete: () => slash.destroy(),
     });
     return true;
+  }
+
+  // -------------------------------------------------------------- save
+
+  toSave(): PlayerSave {
+    return {
+      level: this.level,
+      xp: this.xp,
+      hp: this.hp,
+      mana: this.mana,
+      known: [...this.known],
+      selected: this.selected,
+      x: Math.round(this.x),
+      y: Math.round(this.y),
+    };
+  }
+
+  /** Put the player back as they were in a saved game. */
+  restore(data: PlayerSave): void {
+    this.level = Phaser.Math.Clamp(Math.floor(data.level), 1, MAX_LEVEL);
+    this.xp = Math.max(0, data.xp);
+    this.stats = statsForLevel(this.level);
+    this.maxHp = this.stats.maxHp;
+    this.maxMana = this.stats.maxMana;
+    this.hp = Phaser.Math.Clamp(data.hp, 1, this.maxHp);
+    this.mana = Phaser.Math.Clamp(data.mana, 0, this.maxMana);
+
+    this.known.clear();
+    for (const id of data.known) if (SPELL_BY_ID[id]) this.known.add(id);
+    this.selected = data.selected && this.known.has(data.selected) ? data.selected : null;
+
+    this.applySkin();
+    this.setPosition(data.x, data.y);
+    (this.body as Phaser.Physics.Arcade.Body).reset(data.x, data.y);
+
+    this.publishHp();
+    this.publishMagic();
+    this.publishProgress();
   }
 
   // ------------------------------------------------------- progression

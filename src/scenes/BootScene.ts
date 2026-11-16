@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { createAllTextures } from '../art/textures';
 
-/** Prepares all textures and animations, then starts the game. */
+/** Prepares all textures and animations, then opens the title screen. */
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('Boot');
@@ -9,6 +9,6 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     createAllTextures(this);
-    this.scene.start('Village');
+    this.scene.start('Title');
   }
 }

@@ -31,7 +31,7 @@ Then open http://localhost:5173
 - [x] Step 3 — Magic: 5 elements, mana, spell shrines
 - [x] Step 4 — XP, levels, life stages and stats
 - [x] Step 5 — Dialogue with choices, villagers that remember
-- [ ] Step 6 — Save / load
+- [x] Step 6 — Save / load (autosave, title screen)
 - [ ] Step 7 — Chapter 1: Child (levels 1-5)
 - [ ] Step 8 — Chapter 2: Teen (levels 6-10), academy, first dungeon
 - [ ] Step 9 — Trial of Destiny and the 7 guilds
@@ -48,7 +48,8 @@ src/
   entities/Slime.ts    first enemy
   magic/               spell list and spell effects
   systems/progression.ts  levels, ages, stats
+  systems/save.ts      save and load (browser storage)
   story/               memory, conversations
   ui/DialogueBox.ts    the talking window
-  scenes/              Boot, Village, UI
+  scenes/              Boot, Title, Village, UI
 ```
