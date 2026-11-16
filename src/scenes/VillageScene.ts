@@ -1,12 +1,19 @@
 import Phaser from 'phaser';
 import { TILE, Tile } from '../art/textures';
 import { Player } from '../entities/Player';
+import { Slime } from '../entities/Slime';
 import { MAP_H, MAP_W, buildVillage } from '../world/villageMap';
 
 const ZOOM = 3;
+const SLIME_TOUCH_DAMAGE = 1;
+const SWORD_DAMAGE = 1;
 
 export class VillageScene extends Phaser.Scene {
   private player!: Player;
+  private slimes: Slime[] = [];
+  private spawn = { x: 0, y: 0 };
+  private hitSparks!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private gooSparks!: Phaser.GameObjects.Particles.ParticleEmitter;
 
   constructor() {
     super('Village');
@@ -16,6 +23,7 @@ export class VillageScene extends Phaser.Scene {
     const village = buildVillage();
     const worldW = MAP_W * TILE;
     const worldH = MAP_H * TILE;
+    this.spawn = village.spawn;
 
     // --- ground
     const map = this.make.tilemap({ data: village.ground, tileWidth: TILE, tileHeight: TILE });
@@ -38,9 +46,34 @@ export class VillageScene extends Phaser.Scene {
 
     // --- player
     this.physics.world.setBounds(0, 0, worldW, worldH);
-    this.player = new Player(this, village.spawn.x, village.spawn.y);
+    this.player = new Player(this, this.spawn.x, this.spawn.y);
     this.physics.add.collider(this.player, ground);
     this.physics.add.collider(this.player, solids);
+    this.player.on('died', () => this.onPlayerDied());
+
+    // --- enemies
+    this.slimes = village.slimeSpawns.map((p) => new Slime(this, p.x, p.y));
+    this.physics.add.collider(this.slimes, ground);
+    this.physics.add.collider(this.slimes, solids);
+    this.physics.add.collider(this.slimes, this.slimes);
+    this.physics.add.overlap(this.player, this.slimes, (_player, obj) => {
+      const slime = obj as Slime;
+      if (slime.dangerous) this.player.hurt(SLIME_TOUCH_DAMAGE, slime.x, slime.y);
+    });
+
+    // --- hit effects
+    const burst = (tint: number) =>
+      this.add
+        .particles(0, 0, 'spark', {
+          speed: { min: 25, max: 70 },
+          lifespan: 320,
+          scale: { start: 1, end: 0 },
+          tint,
+          emitting: false,
+        })
+        .setDepth(5000);
+    this.hitSparks = burst(0xffffff);
+    this.gooSparks = burst(0x4fc878);
 
     // --- camera
     const cam = this.cameras.main;
@@ -52,7 +85,36 @@ export class VillageScene extends Phaser.Scene {
     this.scene.launch('UI', { location: 'Willowbrook Village', region: 'Lunaris Kingdom' });
   }
 
-  update(): void {
+  update(_time: number, delta: number): void {
     this.player.update();
+    for (const slime of this.slimes) slime.tick(delta, this.player);
+    this.resolveSwordHits();
+  }
+
+  /** Damage every slime touched by the current sword swing (once per swing). */
+  private resolveSwordHits(): void {
+    const hitbox = this.player.attackHitbox;
+    if (!hitbox) return;
+    for (const slime of this.slimes) {
+      if (!slime.alive || slime.lastHitId === this.player.attackId) continue;
+      if (!Phaser.Geom.Rectangle.Overlaps(hitbox, slime.getBounds())) continue;
+
+      slime.lastHitId = this.player.attackId;
+      const killed = slime.takeHit(SWORD_DAMAGE, this.player.x, this.player.y);
+      this.hitSparks.explode(5, slime.x, slime.y);
+      if (killed) this.gooSparks.explode(12, slime.x, slime.y);
+    }
+  }
+
+  /** Fainting is not the end: you wake up at home with full health. */
+  private onPlayerDied(): void {
+    const cam = this.cameras.main;
+    cam.fadeOut(900, 0, 0, 0);
+    cam.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+      this.player.revive(this.spawn.x, this.spawn.y);
+      for (const slime of this.slimes) if (slime.alive) slime.respawn();
+      cam.fadeIn(900, 0, 0, 0);
+      this.game.events.emit('toast', 'You fainted... Mother carried you home.');
+    });
   }
 }

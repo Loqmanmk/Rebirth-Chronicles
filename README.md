@@ -18,11 +18,12 @@ Then open http://localhost:5173
 
 - Move: arrow keys, WASD or ZQSD
 - Run: hold Shift
+- Attack: Space or J
 
 ## Roadmap
 
 - [x] Step 1 — Project setup, movement, camera, first map (Willowbrook Village)
-- [ ] Step 2 — Combat: attack, enemies, health
+- [x] Step 2 — Combat: sword attack, slimes, health, fainting
 - [ ] Step 3 — Magic: 5 elements, mana, spells
 - [ ] Step 4 — XP, levels and life stages
 - [ ] Step 5 — Dialogue with choices, NPC memory
@@ -39,6 +40,7 @@ src/
   main.ts              game config
   art/textures.ts      placeholder pixel art drawn in code
   world/villageMap.ts  the village map (ground + objects)
-  entities/Player.ts   player movement
+  entities/Player.ts   player movement, attack, health
+  entities/Slime.ts    first enemy
   scenes/              Boot, Village, UI
 ```

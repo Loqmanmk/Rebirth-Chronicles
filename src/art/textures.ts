@@ -363,6 +363,82 @@ export function makeCharacterAnims(scene: Phaser.Scene, key: string): void {
   }
 }
 
+// --------------------------------------------------------------- combat
+
+function makeSlime(scene: Phaser.Scene): void {
+  const tex = scene.textures.createCanvas('slime', 32, 12)!;
+  const ctx = tex.getContext();
+  const draw = (ox: number, squish: number) => {
+    const cy = 7 + squish;
+    const ry = 5 - squish;
+    const rx = 6.5 + squish;
+    disc(ctx, ox + 8, cy, rx + 1, ry + 1, '#1f5a3a');
+    disc(ctx, ox + 8, cy, rx, ry, '#4fc878');
+    disc(ctx, ox + 7, cy - 1, rx - 2.5, ry - 2, '#7be09a');
+    rect(ctx, ox + 5, cy - 3, 2, 1, '#d8ffe4');
+    rect(ctx, ox + 5, cy, 2, 2, '#16302a');
+    rect(ctx, ox + 10, cy, 2, 2, '#16302a');
+  };
+  draw(0, 0);
+  draw(16, 1);
+  tex.add('a', 0, 0, 0, 16, 12);
+  tex.add('b', 0, 16, 0, 16, 12);
+  tex.refresh();
+
+  scene.anims.create({
+    key: 'slime-idle',
+    frames: [{ key: 'slime', frame: 'a' }, { key: 'slime', frame: 'b' }],
+    frameRate: 4,
+    repeat: -1,
+  });
+}
+
+/** Sword swing arc, pointing right. Rotated in game for other directions. */
+function makeSlash(scene: Phaser.Scene): void {
+  const tex = scene.textures.createCanvas('slash', 16, 20)!;
+  const ctx = tex.getContext();
+  disc(ctx, 5, 10, 10, 10, '#ffffff');
+  ctx.globalCompositeOperation = 'destination-out';
+  disc(ctx, 1, 10, 10, 10, '#000000');
+  ctx.globalCompositeOperation = 'source-over';
+  tex.refresh();
+}
+
+function makeSpark(scene: Phaser.Scene): void {
+  const tex = scene.textures.createCanvas('spark', 2, 2)!;
+  rect(tex.getContext(), 0, 0, 2, 2, '#ffffff');
+  tex.refresh();
+}
+
+function makeHearts(scene: Phaser.Scene): void {
+  const rows = [
+    '.oo.oo.',
+    'owrorro',
+    'orrrrro',
+    'orrrrro',
+    '.orrro.',
+    '..oro..',
+    '...o...',
+  ];
+  const tex = scene.textures.createCanvas('heart', 14, 7)!;
+  const ctx = tex.getContext();
+  const palettes: Record<string, string>[] = [
+    { o: '#2a1c14', r: '#e0404a', w: '#ffb0b4' },
+    { o: '#2a1c14', r: '#4a3540', w: '#4a3540' },
+  ];
+  palettes.forEach((colors, i) => {
+    rows.forEach((row, y) => {
+      for (let x = 0; x < row.length; x++) {
+        const color = colors[row[x]];
+        if (color) rect(ctx, i * 7 + x, y, 1, 1, color);
+      }
+    });
+  });
+  tex.add('full', 0, 0, 0, 7, 7);
+  tex.add('empty', 0, 7, 0, 7, 7);
+  tex.refresh();
+}
+
 // ------------------------------------------------------------------ all
 
 export function createAllTextures(scene: Phaser.Scene): void {
@@ -376,6 +452,10 @@ export function createAllTextures(scene: Phaser.Scene): void {
   makeWell(scene);
   makeFences(scene);
   makeSign(scene);
+  makeSlime(scene);
+  makeSlash(scene);
+  makeSpark(scene);
+  makeHearts(scene);
 
   const skin = '#f2c9a0';
   makeCharacter(scene, 'player', {

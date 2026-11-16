@@ -22,6 +22,8 @@ export interface VillageMap {
   ground: number[][];
   objects: MapObject[];
   spawn: { x: number; y: number };
+  /** where wild slimes live */
+  slimeSpawns: { x: number; y: number }[];
 }
 
 const isGrass = (t: number) =>
@@ -173,5 +175,20 @@ export function buildVillage(): VillageMap {
     }
   }
 
-  return { ground, objects, spawn };
+  // --- wild slimes live in the meadows south of the main road
+  const slimeSpawns: { x: number; y: number }[] = [];
+  const slimeZone = (x0: number, y0: number, x1: number, y1: number, count: number) => {
+    for (let tries = 0; tries < 200 && count > 0; tries++) {
+      const tx = x0 + Math.floor(rng() * (x1 - x0 + 1));
+      const ty = y0 + Math.floor(rng() * (y1 - y0 + 1));
+      if (!isGrass(ground[ty][tx]) || reserved[ty][tx]) continue;
+      slimeSpawns.push({ x: tx * TILE + TILE / 2, y: ty * TILE + TILE / 2 });
+      reserve(tx - 1, ty - 1, tx + 1, ty + 1);
+      count--;
+    }
+  };
+  slimeZone(6, 27, 17, 38, 5); // south-west meadow
+  slimeZone(48, 27, 58, 38, 4); // south-east meadow
+
+  return { ground, objects, spawn, slimeSpawns };
 }
