@@ -27,6 +27,8 @@ export interface VillageMap {
   slimeSpawns: { x: number; y: number }[];
   /** pedestals where the player learns a spell */
   shrines: { spell: SpellId; x: number; y: number }[];
+  /** villagers you can talk to (id matches the conversation id) */
+  npcs: { id: string; key: string; x: number; y: number }[];
 }
 
 const isGrass = (t: number) =>
@@ -122,9 +124,10 @@ export function buildVillage(): VillageMap {
   reserve(2, 20, 4, 21);
   reserve(28, 6, 33, 9);
 
-  // --- villagers (they will get dialogue in a later step)
+  // --- villagers
+  const npcs: VillageMap['npcs'] = [];
   const npc = (key: string, tx: number, ty: number) => {
-    objects.push({ key, ...at(tx, ty), solid: { w: 10, h: 6 } });
+    npcs.push({ id: key.replace('npc_', ''), key, ...at(tx, ty) });
     reserve(tx - 1, ty - 1, tx + 1, ty + 1);
   };
   npc('npc_mother', 15, 14);
@@ -205,5 +208,5 @@ export function buildVillage(): VillageMap {
   slimeZone(6, 27, 17, 38, 5); // south-west meadow
   slimeZone(48, 27, 58, 38, 4); // south-east meadow
 
-  return { ground, objects, spawn, slimeSpawns, shrines };
+  return { ground, objects, spawn, slimeSpawns, shrines, npcs };
 }

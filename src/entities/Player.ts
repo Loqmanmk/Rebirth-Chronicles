@@ -36,7 +36,7 @@ const DIRS: Record<Facing, { x: number; y: number; angle: number }> = {
 /**
  * The reincarnated hero.
  * Controls: arrows, WASD (QWERTY) or ZQSD (AZERTY). Shift = run. Space or J = sword.
- * K or F = cast the selected spell. 1-5 or E = choose a spell.
+ * K or F = cast the selected spell. 1-5 or R = choose a spell. (E = talk, see VillageScene)
  * Emits 'died' when health reaches 0 and 'cast' (with the spell) when a spell is cast.
  */
 export class Player extends Phaser.Physics.Arcade.Sprite {
@@ -47,6 +47,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   maxHp = this.stats.maxHp;
   hp = this.maxHp;
   dead = false;
+  /** true while talking: no control, cannot be hurt */
+  busy = false;
 
   maxMana = this.stats.maxMana;
   mana = this.maxMana;
@@ -79,7 +81,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     body.setCollideWorldBounds(true);
 
     this.keys = scene.input.keyboard!.addKeys(
-      'UP,DOWN,LEFT,RIGHT,W,A,S,D,Z,Q,SHIFT,SPACE,J,K,F,E,ONE,TWO,THREE,FOUR,FIVE',
+      'UP,DOWN,LEFT,RIGHT,W,A,S,D,Z,Q,SHIFT,SPACE,J,K,F,R,ONE,TWO,THREE,FOUR,FIVE',
     ) as Record<string, Phaser.Input.Keyboard.Key>;
 
     this.publishHp();
@@ -114,6 +116,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     if (now < this.knockUntil) return; // being pushed back, no control
 
+    if (this.busy) {
+      this.setVelocity(0, 0);
+      this.attackHitbox = null;
+      this.anims.play(`${this.skin}-idle-${this.animDir}`, true);
+      return;
+    }
+
     if (this.attackHitbox && now >= this.attackUntil) this.attackHitbox = null;
 
     const k = this.keys;
@@ -121,11 +130,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.tryAttack();
     }
 
-    // choose a spell: number keys, or E for the next one
+    // choose a spell: number keys, or R for the next one
     NUMBER_KEYS.forEach((name, i) => {
       if (Phaser.Input.Keyboard.JustDown(k[name])) this.select(SPELLS[i].id);
     });
-    if (Phaser.Input.Keyboard.JustDown(k.E)) this.selectNext();
+    if (Phaser.Input.Keyboard.JustDown(k.R)) this.selectNext();
     if (Phaser.Input.Keyboard.JustDown(k.K) || Phaser.Input.Keyboard.JustDown(k.F)) {
       this.tryCast();
     }
@@ -307,7 +316,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   /** Take damage from something at (fromX, fromY). */
   hurt(damage: number, fromX: number, fromY: number): void {
     const now = this.scene.time.now;
-    if (this.dead || now < this.invulnerableUntil) return;
+    if (this.dead || this.busy || now < this.invulnerableUntil) return;
 
     this.hp = Math.max(0, this.hp - damage);
     this.publishHp();

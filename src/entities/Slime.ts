@@ -69,7 +69,7 @@ export class Slime extends Phaser.Physics.Arcade.Sprite {
     const toPlayer = Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y);
     const playerFromHome = Phaser.Math.Distance.Between(this.home.x, this.home.y, player.x, player.y);
 
-    if (!player.dead && toPlayer < SIGHT_RANGE && playerFromHome < LEASH_RANGE) {
+    if (!player.dead && !player.busy && toPlayer < SIGHT_RANGE && playerFromHome < LEASH_RANGE) {
       // chase, moving in little hops
       const hop = 0.35 + 0.65 * Math.abs(Math.sin(now / 170));
       this.scene.physics.moveToObject(this, player, CHASE_SPEED * hop * slow);

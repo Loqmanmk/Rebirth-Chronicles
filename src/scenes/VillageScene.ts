@@ -3,6 +3,7 @@ import { TILE, Tile } from '../art/textures';
 import { Player } from '../entities/Player';
 import { Slime } from '../entities/Slime';
 import { SpellCaster, type HitOptions } from '../magic/SpellCaster';
+import { memory } from '../story/memory';
 import { SPELL_BY_ID, type SpellDef, type SpellId } from '../magic/spells';
 import { MAP_H, MAP_W, buildVillage } from '../world/villageMap';
 
@@ -10,6 +11,14 @@ const ZOOM = 3;
 const SLIME_TOUCH_DAMAGE = 1;
 const SLIME_XP = 5;
 const SHRINE_XP = 10;
+const TALK_RANGE = 24;
+
+interface Npc {
+  id: string;
+  x: number;
+  y: number;
+  sprite: Phaser.GameObjects.Image;
+}
 
 interface Shrine {
   spell: SpellId;
@@ -26,6 +35,10 @@ export class VillageScene extends Phaser.Scene {
   private gooSparks!: Phaser.GameObjects.Particles.ParticleEmitter;
   private shrines: Shrine[] = [];
   private levelSparks!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private npcs: Npc[] = [];
+  private talkPrompt!: Phaser.GameObjects.Text;
+  private talkKey!: Phaser.Input.Keyboard.Key;
+  private nextTalkAt = 0;
 
   constructor() {
     super('Village');
@@ -55,6 +68,48 @@ export class VillageScene extends Phaser.Scene {
         solids.add(zone);
       }
     }
+
+    // --- villagers
+    this.npcs = village.npcs.map(({ id, key, x, y }) => {
+      const sprite = this.add.image(x, y, key, 'down0').setOrigin(0.5, 1).setDepth(y);
+      const zone = this.add.zone(x, y - 3, 10, 6);
+      this.physics.add.existing(zone, true);
+      solids.add(zone);
+      return { id, x, y, sprite };
+    });
+    this.talkPrompt = this.add
+      .text(0, 0, 'E', {
+        fontFamily: 'Georgia, serif',
+        fontSize: '8px',
+        color: '#1a1420',
+        backgroundColor: '#ffd860',
+        padding: { x: 2, y: 0 },
+      })
+      .setOrigin(0.5, 1)
+      .setResolution(4)
+      .setDepth(6000)
+      .setVisible(false);
+    this.talkKey = this.input.keyboard!.addKey('E');
+
+    // conversations run in the UI scene and tell us what happened
+    const ev = this.game.events;
+    const onClose = () => {
+      this.player.busy = false;
+      this.nextTalkAt = this.time.now + 300;
+    };
+    const onXp = (amount: number) => this.giveXp(amount, this.player.x, this.player.y - 8);
+    const onHeal = () => {
+      this.player.heal(99);
+      this.levelSparks.explode(10, this.player.x, this.player.y);
+    };
+    ev.on('dialogue-close', onClose);
+    ev.on('story-xp', onXp);
+    ev.on('story-heal', onHeal);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      ev.off('dialogue-close', onClose);
+      ev.off('story-xp', onXp);
+      ev.off('story-heal', onHeal);
+    });
 
     // --- player
     this.physics.world.setBounds(0, 0, worldW, worldH);
@@ -126,6 +181,37 @@ export class VillageScene extends Phaser.Scene {
     for (const slime of this.slimes) slime.tick(delta, this.player);
     this.resolveSwordHits();
     this.checkShrines();
+    this.checkTalk();
+  }
+
+  /** Show the E prompt near a villager and start a conversation on E. */
+  private checkTalk(): void {
+    const p = this.player;
+    let near: Npc | null = null;
+    let best = TALK_RANGE;
+    for (const npc of this.npcs) {
+      const d = Phaser.Math.Distance.Between(p.x, p.y + 6, npc.x, npc.y - 4);
+      if (d < best) {
+        best = d;
+        near = npc;
+      }
+    }
+
+    const pressed = Phaser.Input.Keyboard.JustDown(this.talkKey);
+    const canTalk = near !== null && !p.busy && !p.dead && this.time.now >= this.nextTalkAt;
+    this.talkPrompt.setVisible(canTalk);
+    if (!near || !canTalk) return;
+    this.talkPrompt.setPosition(near.x, near.y - 20);
+    if (!pressed) return;
+
+    // the villager turns to look at you
+    const dx = p.x - near.x;
+    const dy = p.y + 6 - near.y;
+    if (Math.abs(dx) > Math.abs(dy)) near.sprite.setFrame('side0').setFlipX(dx < 0);
+    else near.sprite.setFrame(dy < 0 ? 'up0' : 'down0').setFlipX(false);
+
+    p.busy = true;
+    this.game.events.emit('dialogue-start', near.id);
   }
 
   /** Walking onto a shrine teaches its spell. */
@@ -160,6 +246,7 @@ export class VillageScene extends Phaser.Scene {
     this.hitSparks.explode(5, slime.x, slime.y);
     if (killed) {
       this.gooSparks.explode(12, slime.x, slime.y);
+      memory.counters.slimesKilled++;
       this.giveXp(SLIME_XP, slime.x, slime.y);
     }
   }
@@ -211,6 +298,7 @@ export class VillageScene extends Phaser.Scene {
 
   /** Fainting is not the end: you wake up at home with full health. */
   private onPlayerDied(): void {
+    memory.counters.fainted++;
     const cam = this.cameras.main;
     cam.fadeOut(900, 0, 0, 0);
     cam.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {

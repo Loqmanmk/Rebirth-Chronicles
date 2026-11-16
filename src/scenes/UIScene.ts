@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { SPELLS, SPELL_BY_ID, type SpellId } from '../magic/spells';
 import type { Stats } from '../systems/progression';
+import { CONVERSATIONS } from '../story/dialogues';
+import { DialogueBox } from '../ui/DialogueBox';
 
 interface UIData {
   location: string;
@@ -30,6 +32,7 @@ export class UIScene extends Phaser.Scene {
   private xpFill!: Phaser.GameObjects.Rectangle;
   private statsPanel!: Phaser.GameObjects.Container;
   private statsText!: Phaser.GameObjects.Text;
+  private dialogue!: DialogueBox;
 
   constructor() {
     super('UI');
@@ -161,7 +164,7 @@ export class UIScene extends Phaser.Scene {
       .text(
         width / 2,
         24,
-        'Move: Arrows / WASD / ZQSD    Run: Shift    Sword: Space / J    Spell: K / F    Choose spell: 1-5 / E    Stats: C',
+        'Move: Arrows / WASD / ZQSD    Run: Shift    Sword: Space / J    Spell: K / F    Choose spell: 1-5 / R    Talk: E    Stats: C',
         {
           fontFamily: FONT,
           fontSize: '14px',
@@ -189,10 +192,18 @@ export class UIScene extends Phaser.Scene {
       .setAlpha(0);
     this.game.events.on('toast', this.showToast, this);
 
+    // conversations
+    this.dialogue = new DialogueBox(this, {
+      xp: (amount) => this.game.events.emit('story-xp', amount),
+      heal: () => this.game.events.emit('story-heal'),
+    });
+    this.game.events.on('dialogue-start', this.startDialogue, this);
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.registry.events.off('changedata-hp', this.drawHearts, this);
       this.registry.events.off('changedata-maxHp', this.drawHearts, this);
       this.game.events.off('toast', this.showToast, this);
+      this.game.events.off('dialogue-start', this.startDialogue, this);
       this.game.events.off('mana-fail', this.flashMana, this);
       this.registry.events.off('changedata-level', this.drawProgress, this);
       this.registry.events.off('changedata-xp', this.drawProgress, this);
@@ -201,7 +212,14 @@ export class UIScene extends Phaser.Scene {
     });
   }
 
-  update(): void {
+  private startDialogue(npcId: string): void {
+    const conv = CONVERSATIONS[npcId];
+    if (conv) this.dialogue.open(conv);
+    else this.game.events.emit('dialogue-close');
+  }
+
+  update(_time: number, delta: number): void {
+    this.dialogue.update(delta);
     const mana: number = this.registry.get('mana') ?? 0;
     const maxMana: number = this.registry.get('maxMana') ?? 1;
     this.manaFill.width = MANA_BAR_W * Phaser.Math.Clamp(mana / maxMana, 0, 1);
