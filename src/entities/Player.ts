@@ -1,19 +1,26 @@
 import Phaser from 'phaser';
 import { SPELLS, SPELL_BY_ID, type SpellDef, type SpellId } from '../magic/spells';
+import {
+  MAX_LEVEL,
+  STAGE_SKIN,
+  ageForLevel,
+  stageForLevel,
+  statsForLevel,
+  xpToNext,
+  type Stage,
+} from '../systems/progression';
 
 export type Facing = 'down' | 'up' | 'left' | 'right';
 
 const WALK_SPEED = 60;
 const RUN_SPEED = 95;
 
-const MAX_HP = 5;
 const ATTACK_TIME = 180; // how long a swing lasts (ms)
 const ATTACK_COOLDOWN = 340; // time between two swings (ms)
 const INVULNERABLE_TIME = 1000; // safe time after being hit (ms)
 const KNOCKBACK_TIME = 160;
 const KNOCKBACK_SPEED = 150;
 
-const MAX_MANA = 20;
 const MANA_REGEN = 1.2; // mana per second
 const CAST_TIME = 160; // stand still this long when casting (ms)
 const SPELL_COOLDOWN = 450; // time between two spells (ms)
@@ -33,12 +40,16 @@ const DIRS: Record<Facing, { x: number; y: number; angle: number }> = {
  * Emits 'died' when health reaches 0 and 'cast' (with the spell) when a spell is cast.
  */
 export class Player extends Phaser.Physics.Arcade.Sprite {
-  hp = MAX_HP;
-  readonly maxHp = MAX_HP;
+  level = 1;
+  xp = 0;
+  stats = statsForLevel(1);
+
+  maxHp = this.stats.maxHp;
+  hp = this.maxHp;
   dead = false;
 
-  mana = MAX_MANA;
-  readonly maxMana = MAX_MANA;
+  maxMana = this.stats.maxMana;
+  mana = this.maxMana;
   /** spells the player has learned */
   readonly known = new Set<SpellId>();
   selected: SpellId | null = null;
@@ -55,6 +66,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
   private knockUntil = 0;
   private invulnerableUntil = 0;
   private nextSpellAt = 0;
+  private skin = STAGE_SKIN.Child;
 
   constructor(scene: Phaser.Scene, x: number, y: number) {
     super(scene, x, y, 'player', 'down0');
@@ -72,6 +84,11 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     this.publishHp();
     this.publishMagic();
+    this.publishProgress();
+  }
+
+  get stage(): Stage {
+    return stageForLevel(this.level);
   }
 
   /** Unit vector of the direction the player is looking at. */
@@ -130,19 +147,19 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     if (move.lengthSq() === 0) {
       this.setVelocity(0, 0);
-      this.anims.play(`player-idle-${this.animDir}`, true);
+      this.anims.play(`${this.skin}-idle-${this.animDir}`, true);
       return;
     }
 
     const running = k.SHIFT.isDown;
-    move.normalize().scale(running ? RUN_SPEED : WALK_SPEED);
+    move.normalize().scale((running ? RUN_SPEED : WALK_SPEED) * this.stats.speed);
     this.setVelocity(move.x, move.y);
 
     if (move.x !== 0) this.facing = move.x < 0 ? 'left' : 'right';
     else this.facing = move.y < 0 ? 'up' : 'down';
     this.setFlipX(this.facing === 'left');
 
-    this.anims.play(`player-walk-${this.animDir}`, true);
+    this.anims.play(`${this.skin}-walk-${this.animDir}`, true);
     this.anims.timeScale = running ? 1.5 : 1;
   }
 
@@ -155,7 +172,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.nextAttackAt = now + ATTACK_COOLDOWN;
     this.attackId++;
     this.setVelocity(0, 0);
-    this.anims.play(`player-idle-${this.animDir}`, true);
+    this.anims.play(`${this.skin}-idle-${this.animDir}`, true);
 
     const dir = DIRS[this.facing];
     const cx = this.x + dir.x * 12;
@@ -176,6 +193,56 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       onComplete: () => slash.destroy(),
     });
     return true;
+  }
+
+  // ------------------------------------------------------- progression
+
+  /** Gain experience. Levels up (maybe several times) when the bar is full. */
+  gainXp(amount: number): void {
+    if (this.level >= MAX_LEVEL) return;
+    this.xp += amount;
+    while (this.level < MAX_LEVEL && this.xp >= xpToNext(this.level)) {
+      this.xp -= xpToNext(this.level);
+      this.levelUp();
+    }
+    if (this.level >= MAX_LEVEL) this.xp = 0;
+    this.publishProgress();
+  }
+
+  private levelUp(): void {
+    const oldStage = this.stage;
+    this.level++;
+    this.stats = statsForLevel(this.level);
+    this.maxHp = this.stats.maxHp;
+    this.maxMana = this.stats.maxMana;
+    if (!this.dead) this.hp = this.maxHp; // a level up heals you
+    this.mana = this.maxMana;
+
+    const stageChanged = this.stage !== oldStage;
+    if (stageChanged) this.applySkin();
+
+    this.publishHp();
+    this.publishMagic();
+    this.publishProgress();
+    this.emit('levelup', this.level, stageChanged);
+  }
+
+  /** The hero's body grows with each life stage. */
+  private applySkin(): void {
+    this.skin = STAGE_SKIN[this.stage];
+    this.setTexture(this.skin, 'down0');
+    const body = this.body as Phaser.Physics.Arcade.Body;
+    body.setSize(8, 5).setOffset(4, this.height - 5);
+  }
+
+  private publishProgress(): void {
+    const r = this.scene.registry;
+    r.set('xp', this.xp);
+    r.set('xpNext', this.level >= MAX_LEVEL ? 0 : xpToNext(this.level));
+    r.set('age', ageForLevel(this.level));
+    r.set('stage', this.stage);
+    r.set('stats', this.stats);
+    r.set('level', this.level); // last: the UI redraws on this one
   }
 
   // ------------------------------------------------------------- magic
@@ -225,7 +292,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.attackUntil = now + CAST_TIME; // stand still, like a sword swing
     this.attackHitbox = null;
     this.setVelocity(0, 0);
-    this.anims.play(`player-idle-${this.animDir}`, true);
+    this.anims.play(`${this.skin}-idle-${this.animDir}`, true);
     this.emit('cast', spell);
     return spell;
   }
@@ -265,7 +332,7 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     this.dead = true;
     this.setVelocity(0, 0);
     this.setAlpha(1);
-    this.anims.play(`player-idle-${this.animDir}`, true);
+    this.anims.play(`${this.skin}-idle-${this.animDir}`, true);
     (this.body as Phaser.Physics.Arcade.Body).enable = false;
     this.emit('died');
   }

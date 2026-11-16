@@ -105,9 +105,9 @@ export class SpellCaster {
     if (!orb.active || !slime.alive) return;
     const spell = orb.getData('spell') as SpellDef;
     if (spell.id === 'fire') {
-      this.hit(slime, 2, orb.x, orb.y);
+      this.hit(slime, 2 + this.player.stats.magic, orb.x, orb.y);
     } else {
-      this.hit(slime, 1, orb.x, orb.y, { knockback: 60 });
+      this.hit(slime, 1 + this.player.stats.magic, orb.x, orb.y, { knockback: 60 });
       slime.slow(3500);
     }
     this.popProjectile(orb);
@@ -170,7 +170,7 @@ export class SpellCaster {
 
     for (const slime of this.slimes) {
       if (slime.alive && Phaser.Math.Distance.Between(px, py, slime.x, slime.y) <= radius + 6) {
-        this.hit(slime, 2, px, py, { knockback: 170, stun: 750 });
+        this.hit(slime, 2 + this.player.stats.magic, px, py, { knockback: 170, stun: 750 });
       }
     }
 

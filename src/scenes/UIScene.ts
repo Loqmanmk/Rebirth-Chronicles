@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { SPELLS, SPELL_BY_ID, type SpellId } from '../magic/spells';
+import type { Stats } from '../systems/progression';
 
 interface UIData {
   location: string;
@@ -23,6 +24,12 @@ export class UIScene extends Phaser.Scene {
   private manaFill!: Phaser.GameObjects.Rectangle;
   private slots: SpellSlot[] = [];
   private spellLabel!: Phaser.GameObjects.Text;
+  private place: UIData = { location: '', region: '' };
+  private infoLabel!: Phaser.GameObjects.Text;
+  private levelLabel!: Phaser.GameObjects.Text;
+  private xpFill!: Phaser.GameObjects.Rectangle;
+  private statsPanel!: Phaser.GameObjects.Container;
+  private statsText!: Phaser.GameObjects.Text;
 
   constructor() {
     super('UI');
@@ -32,8 +39,9 @@ export class UIScene extends Phaser.Scene {
     const { width, height } = this.scale;
 
     // small permanent label, top-left
-    this.add
-      .text(16, 12, `${data.location}\n${data.region}  ·  Age 5`, {
+    this.place = data;
+    this.infoLabel = this.add
+      .text(16, 12, '', {
         fontFamily: FONT,
         fontSize: '15px',
         color: '#ffffff',
@@ -53,6 +61,37 @@ export class UIScene extends Phaser.Scene {
     this.add.rectangle(18, 92, MANA_BAR_W, 8, 0x26304a).setOrigin(0);
     this.manaFill = this.add.rectangle(18, 92, MANA_BAR_W, 8, 0x4aa8ff).setOrigin(0);
     this.game.events.on('mana-fail', this.flashMana, this);
+
+    // level + XP bar
+    this.levelLabel = this.add.text(150, 86, '', {
+      fontFamily: FONT,
+      fontSize: '15px',
+      color: '#ffe680',
+      stroke: '#1a1420',
+      strokeThickness: 4,
+    });
+    this.add.rectangle(16, 104, MANA_BAR_W + 4, 8, 0x1a1420).setOrigin(0);
+    this.xpFill = this.add.rectangle(18, 106, 0, 4, 0xffd860).setOrigin(0);
+
+    // stats panel (press C)
+    const panelBg = this.add
+      .rectangle(0, 0, 230, 190, 0x1a1420, 0.88)
+      .setOrigin(0)
+      .setStrokeStyle(2, 0xc9a64a);
+    this.statsText = this.add.text(16, 12, '', {
+      fontFamily: FONT,
+      fontSize: '16px',
+      color: '#fff4d6',
+      lineSpacing: 6,
+    });
+    this.statsPanel = this.add
+      .container(width - 246, 50, [panelBg, this.statsText])
+      .setVisible(false);
+    this.input.keyboard!.on('keydown-C', () => this.statsPanel.setVisible(!this.statsPanel.visible));
+
+    this.drawProgress();
+    this.registry.events.on('changedata-level', this.drawProgress, this);
+    this.registry.events.on('changedata-xp', this.drawProgress, this);
 
     // spell bar, bottom-left
     const barY = height - 56;
@@ -122,7 +161,7 @@ export class UIScene extends Phaser.Scene {
       .text(
         width / 2,
         24,
-        'Move: Arrows / WASD / ZQSD    Run: Shift    Sword: Space / J    Spell: K / F    Choose spell: 1-5 / E',
+        'Move: Arrows / WASD / ZQSD    Run: Shift    Sword: Space / J    Spell: K / F    Choose spell: 1-5 / E    Stats: C',
         {
           fontFamily: FONT,
           fontSize: '14px',
@@ -155,6 +194,8 @@ export class UIScene extends Phaser.Scene {
       this.registry.events.off('changedata-maxHp', this.drawHearts, this);
       this.game.events.off('toast', this.showToast, this);
       this.game.events.off('mana-fail', this.flashMana, this);
+      this.registry.events.off('changedata-level', this.drawProgress, this);
+      this.registry.events.off('changedata-xp', this.drawProgress, this);
       this.registry.events.off('changedata-knownSpells', this.drawSpells, this);
       this.registry.events.off('changedata-selectedSpell', this.drawSpells, this);
     });
@@ -170,6 +211,34 @@ export class UIScene extends Phaser.Scene {
   private flashMana(): void {
     this.manaFill.setFillStyle(0xe0404a);
     this.time.delayedCall(180, () => this.manaFill.setFillStyle(0x4aa8ff));
+  }
+
+  /** Level, age, XP bar and the stats panel. */
+  private drawProgress(): void {
+    const r = this.registry;
+    const level: number = r.get('level') ?? 1;
+    const xp: number = r.get('xp') ?? 0;
+    const xpNext: number = r.get('xpNext') ?? 0;
+    const stats: Stats | undefined = r.get('stats');
+
+    this.infoLabel.setText(
+      this.place.location + '\n' + this.place.region + '  ·  Age ' + r.get('age') + ' (' + r.get('stage') + ')',
+    );
+    this.levelLabel.setText('Lv ' + level);
+    this.xpFill.width = xpNext > 0 ? MANA_BAR_W * Phaser.Math.Clamp(xp / xpNext, 0, 1) : MANA_BAR_W;
+
+    if (!stats) return;
+    this.statsText.setText(
+      [
+        'Level ' + level + '  ·  ' + r.get('stage'),
+        'Age: ' + r.get('age'),
+        'XP: ' + (xpNext > 0 ? xp + ' / ' + xpNext : 'MAX'),
+        'Hearts: ' + stats.maxHp,
+        'Mana: ' + stats.maxMana,
+        'Strength: ' + stats.strength,
+        'Magic: +' + stats.magic,
+      ].join('\n'),
+    );
   }
 
   private drawSpells(): void {

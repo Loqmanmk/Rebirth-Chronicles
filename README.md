@@ -21,13 +21,14 @@ Then open http://localhost:5173
 - Sword: Space or J
 - Cast spell: K or F
 - Choose spell: 1-5, or E for the next one
+- Stats panel: C
 
 ## Roadmap
 
 - [x] Step 1 — Project setup, movement, camera, first map (Willowbrook Village)
 - [x] Step 2 — Combat: sword attack, slimes, health, fainting
 - [x] Step 3 — Magic: 5 elements, mana, spell shrines
-- [ ] Step 4 — XP, levels and life stages
+- [x] Step 4 — XP, levels, life stages and stats
 - [ ] Step 5 — Dialogue with choices, NPC memory
 - [ ] Step 6 — Save / load
 - [ ] Step 7 — Chapter 1: Child (levels 1-5)
@@ -44,5 +45,7 @@ src/
   world/villageMap.ts  the village map (ground + objects)
   entities/Player.ts   player movement, attack, health
   entities/Slime.ts    first enemy
+  magic/               spell list and spell effects
+  systems/progression.ts  levels, ages, stats
   scenes/              Boot, Village, UI
 ```

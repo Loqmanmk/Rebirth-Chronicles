@@ -8,7 +8,8 @@ import { MAP_H, MAP_W, buildVillage } from '../world/villageMap';
 
 const ZOOM = 3;
 const SLIME_TOUCH_DAMAGE = 1;
-const SWORD_DAMAGE = 1;
+const SLIME_XP = 5;
+const SHRINE_XP = 10;
 
 interface Shrine {
   spell: SpellId;
@@ -24,6 +25,7 @@ export class VillageScene extends Phaser.Scene {
   private hitSparks!: Phaser.GameObjects.Particles.ParticleEmitter;
   private gooSparks!: Phaser.GameObjects.Particles.ParticleEmitter;
   private shrines: Shrine[] = [];
+  private levelSparks!: Phaser.GameObjects.Particles.ParticleEmitter;
 
   constructor() {
     super('Village');
@@ -84,6 +86,10 @@ export class VillageScene extends Phaser.Scene {
         .setDepth(5000);
     this.hitSparks = burst(0xffffff);
     this.gooSparks = burst(0x4fc878);
+    this.levelSparks = burst(0xffe680);
+    this.player.on('levelup', (level: number, stageChanged: boolean) =>
+      this.onLevelUp(level, stageChanged),
+    );
 
     // --- magic
     const caster = new SpellCaster(this, this.player, this.slimes, solids, (slime, dmg, x, y, opts) =>
@@ -141,6 +147,7 @@ export class VillageScene extends Phaser.Scene {
         onComplete: () => shrine.icon.destroy(),
       });
       this.hitSparks.explode(14, shrine.x, shrine.y - 12);
+      this.giveXp(SHRINE_XP, shrine.x, shrine.y - 20);
       this.game.events.emit(
         'toast',
         `You learned ${spell.name}!  (${spell.element} magic)\n${spell.description}`,
@@ -151,7 +158,42 @@ export class VillageScene extends Phaser.Scene {
   private hitSlime(slime: Slime, damage: number, fromX: number, fromY: number, opts?: HitOptions): void {
     const killed = slime.takeHit(damage, fromX, fromY, opts);
     this.hitSparks.explode(5, slime.x, slime.y);
-    if (killed) this.gooSparks.explode(12, slime.x, slime.y);
+    if (killed) {
+      this.gooSparks.explode(12, slime.x, slime.y);
+      this.giveXp(SLIME_XP, slime.x, slime.y);
+    }
+  }
+
+  /** Give XP to the player and show a small floating number. */
+  private giveXp(amount: number, x: number, y: number): void {
+    const label = this.add
+      .text(x, y - 8, '+' + amount + ' XP', {
+        fontFamily: 'Georgia, serif',
+        fontSize: '8px',
+        color: '#ffe680',
+        stroke: '#1a1420',
+        strokeThickness: 2,
+      })
+      .setOrigin(0.5)
+      .setResolution(4)
+      .setDepth(6000);
+    this.tweens.add({
+      targets: label,
+      y: label.y - 14,
+      alpha: 0,
+      duration: 900,
+      onComplete: () => label.destroy(),
+    });
+    this.player.gainXp(amount);
+  }
+
+  private onLevelUp(level: number, stageChanged: boolean): void {
+    const p = this.player;
+    this.levelSparks.explode(24, p.x, p.y);
+    this.cameras.main.flash(250, 255, 240, 180);
+    const lines = ['Level ' + level + '!   You are now ' + this.registry.get('age') + ' years old.'];
+    if (stageChanged) lines.push('A new stage of life begins: ' + p.stage + '.');
+    this.game.events.emit('toast', lines.join(String.fromCharCode(10)));
   }
 
   /** Damage every slime touched by the current sword swing (once per swing). */
@@ -163,7 +205,7 @@ export class VillageScene extends Phaser.Scene {
       if (!Phaser.Geom.Rectangle.Overlaps(hitbox, slime.getBounds())) continue;
 
       slime.lastHitId = this.player.attackId;
-      this.hitSlime(slime, SWORD_DAMAGE, this.player.x, this.player.y);
+      this.hitSlime(slime, this.player.stats.strength, this.player.x, this.player.y);
     }
   }
 

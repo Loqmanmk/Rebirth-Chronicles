@@ -586,5 +586,18 @@ export function createAllTextures(scene: Phaser.Scene): void {
     hair: '#e0b040', skin, tunic: '#c9853a', tunicDark: '#9c6428', pants: '#5a4632',
   }, true);
 
-  makeCharacterAnims(scene, 'player');
+  // the hero at later life stages (taller sprite)
+  makeCharacter(scene, 'player_teen', {
+    hair: '#6b4226', skin, tunic: '#3f7fbf', tunicDark: '#2f5f93', pants: '#5a4632',
+  }, true);
+  makeCharacter(scene, 'player_adult', {
+    hair: '#6b4226', skin, tunic: '#2f5f93', tunicDark: '#234a73', pants: '#3a3340',
+  }, true);
+  makeCharacter(scene, 'player_master', {
+    hair: '#8a8a94', skin, tunic: '#e8e0d0', tunicDark: '#c9a64a', pants: '#3a3340',
+  }, true);
+
+  for (const key of ['player', 'player_teen', 'player_adult', 'player_master']) {
+    makeCharacterAnims(scene, key);
+  }
 }
