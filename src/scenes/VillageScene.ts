@@ -2,11 +2,20 @@ import Phaser from 'phaser';
 import { TILE, Tile } from '../art/textures';
 import { Player } from '../entities/Player';
 import { Slime } from '../entities/Slime';
+import { SpellCaster, type HitOptions } from '../magic/SpellCaster';
+import { SPELL_BY_ID, type SpellDef, type SpellId } from '../magic/spells';
 import { MAP_H, MAP_W, buildVillage } from '../world/villageMap';
 
 const ZOOM = 3;
 const SLIME_TOUCH_DAMAGE = 1;
 const SWORD_DAMAGE = 1;
+
+interface Shrine {
+  spell: SpellId;
+  x: number;
+  y: number;
+  icon: Phaser.GameObjects.Image;
+}
 
 export class VillageScene extends Phaser.Scene {
   private player!: Player;
@@ -14,6 +23,7 @@ export class VillageScene extends Phaser.Scene {
   private spawn = { x: 0, y: 0 };
   private hitSparks!: Phaser.GameObjects.Particles.ParticleEmitter;
   private gooSparks!: Phaser.GameObjects.Particles.ParticleEmitter;
+  private shrines: Shrine[] = [];
 
   constructor() {
     super('Village');
@@ -75,6 +85,26 @@ export class VillageScene extends Phaser.Scene {
     this.hitSparks = burst(0xffffff);
     this.gooSparks = burst(0x4fc878);
 
+    // --- magic
+    const caster = new SpellCaster(this, this.player, this.slimes, solids, (slime, dmg, x, y, opts) =>
+      this.hitSlime(slime, dmg, x, y, opts),
+    );
+    this.player.on('cast', (spell: SpellDef) => caster.cast(spell));
+
+    this.shrines = village.shrines.map(({ spell, x, y }) => {
+      this.add.image(x, y, 'pedestal').setOrigin(0.5, 1).setDepth(y - 6);
+      const icon = this.add.image(x, y - 16, 'elements', spell).setDepth(y + 20);
+      this.tweens.add({
+        targets: icon,
+        y: icon.y - 3,
+        duration: 900,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+      return { spell, x, y, icon };
+    });
+
     // --- camera
     const cam = this.cameras.main;
     cam.setZoom(ZOOM);
@@ -86,9 +116,42 @@ export class VillageScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    this.player.update();
+    this.player.update(delta);
     for (const slime of this.slimes) slime.tick(delta, this.player);
     this.resolveSwordHits();
+    this.checkShrines();
+  }
+
+  /** Walking onto a shrine teaches its spell. */
+  private checkShrines(): void {
+    for (const shrine of this.shrines) {
+      if (this.player.known.has(shrine.spell)) continue;
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y + 6, shrine.x, shrine.y - 4);
+      if (d > 11) continue;
+
+      this.player.learn(shrine.spell);
+      const spell = SPELL_BY_ID[shrine.spell];
+      this.tweens.killTweensOf(shrine.icon);
+      this.tweens.add({
+        targets: shrine.icon,
+        y: shrine.icon.y - 14,
+        alpha: 0,
+        scale: 2,
+        duration: 600,
+        onComplete: () => shrine.icon.destroy(),
+      });
+      this.hitSparks.explode(14, shrine.x, shrine.y - 12);
+      this.game.events.emit(
+        'toast',
+        `You learned ${spell.name}!  (${spell.element} magic)\n${spell.description}`,
+      );
+    }
+  }
+
+  private hitSlime(slime: Slime, damage: number, fromX: number, fromY: number, opts?: HitOptions): void {
+    const killed = slime.takeHit(damage, fromX, fromY, opts);
+    this.hitSparks.explode(5, slime.x, slime.y);
+    if (killed) this.gooSparks.explode(12, slime.x, slime.y);
   }
 
   /** Damage every slime touched by the current sword swing (once per swing). */
@@ -100,9 +163,7 @@ export class VillageScene extends Phaser.Scene {
       if (!Phaser.Geom.Rectangle.Overlaps(hitbox, slime.getBounds())) continue;
 
       slime.lastHitId = this.player.attackId;
-      const killed = slime.takeHit(SWORD_DAMAGE, this.player.x, this.player.y);
-      this.hitSparks.explode(5, slime.x, slime.y);
-      if (killed) this.gooSparks.explode(12, slime.x, slime.y);
+      this.hitSlime(slime, SWORD_DAMAGE, this.player.x, this.player.y);
     }
   }
 

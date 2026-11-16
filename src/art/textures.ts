@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { SPELLS } from '../magic/spells';
 
 /**
  * All art is drawn in code for now (placeholder pixel art).
@@ -439,6 +440,115 @@ function makeHearts(scene: Phaser.Scene): void {
   tex.refresh();
 }
 
+// ---------------------------------------------------------------- magic
+
+const ELEMENT_ICONS: Record<string, string[]> = {
+  fire: [
+    '....x....',
+    '...xx....',
+    '...xxx...',
+    '..xxlx.x.',
+    '.xxllxxx.',
+    '.xllllxx.',
+    '.xllllx..',
+    '..xllx...',
+    '...xx....',
+  ],
+  water: [
+    '....x....',
+    '....x....',
+    '...xxx...',
+    '...xxx...',
+    '..xxxxx..',
+    '.xxlxxxx.',
+    '.xlxxxxx.',
+    '.xxxxxxx.',
+    '..xxxxx..',
+  ],
+  wind: [
+    '.........',
+    '...xxx...',
+    '......x..',
+    'xxxxxx...',
+    '.........',
+    'llllllll.',
+    '........l',
+    '..xxxxxx.',
+    '.........',
+  ],
+  earth: [
+    '.........',
+    '....x....',
+    '...xlx...',
+    '...xxx...',
+    '..xxxxx..',
+    '..xxxlx..',
+    '.xxxxxxx.',
+    '.xxxxxxx.',
+    'xxxxxxxxx',
+  ],
+  spirit: [
+    '....x....',
+    '....x....',
+    '...xlx...',
+    '..xlllx..',
+    'xxlllllxx',
+    '..xlllx..',
+    '...xlx...',
+    '....x....',
+    '....x....',
+  ],
+};
+
+const hex = (n: number) => '#' + n.toString(16).padStart(6, '0');
+
+/** One 9x9 icon per element, in the texture 'elements' (frame = spell id). */
+function makeElementIcons(scene: Phaser.Scene): void {
+  const ids = SPELLS.map((s) => s.id);
+  const tex = scene.textures.createCanvas('elements', 9 * ids.length, 9)!;
+  const ctx = tex.getContext();
+  SPELLS.forEach((spell, i) => {
+    const colors: Record<string, string> = { x: hex(spell.color), l: hex(spell.light) };
+    ELEMENT_ICONS[spell.id].forEach((row, y) => {
+      if (row.length !== 9) console.warn(`Icon row has wrong length: "${row}"`);
+      for (let x = 0; x < row.length; x++) {
+        const color = colors[row[x]];
+        if (color) rect(ctx, i * 9 + x, y, 1, 1, color);
+      }
+    });
+    tex.add(spell.id, 0, i * 9, 0, 9, 9);
+  });
+  tex.refresh();
+}
+
+function makeMagicObjects(scene: Phaser.Scene): void {
+  // projectile (white, tinted in game)
+  let tex = scene.textures.createCanvas('orb', 8, 8)!;
+  let ctx = tex.getContext();
+  disc(ctx, 4, 4, 4, 4, '#c8c8c8');
+  disc(ctx, 4, 4, 2.5, 2.5, '#ffffff');
+  tex.refresh();
+
+  // earth spike
+  tex = scene.textures.createCanvas('spike', 8, 12)!;
+  ctx = tex.getContext();
+  for (let y = 0; y < 12; y++) {
+    const half = Math.floor(y / 3);
+    rect(ctx, 4 - half - 1, y, half * 2 + 2, 1, '#8a6a40');
+    rect(ctx, 4 - half - 1, y, 1 + Math.floor(half / 2), 1, '#c8a878');
+  }
+  tex.refresh();
+
+  // stone pedestal that holds an element to learn
+  tex = scene.textures.createCanvas('pedestal', 14, 10)!;
+  ctx = tex.getContext();
+  disc(ctx, 7, 7, 7, 3, '#5d5e70');
+  rect(ctx, 3, 3, 8, 5, '#77788a');
+  disc(ctx, 7, 3, 5, 2, '#9a9bab');
+  rect(ctx, 5, 2, 3, 1, '#bfc0cc');
+  tex.refresh();
+}
+
 // ------------------------------------------------------------------ all
 
 export function createAllTextures(scene: Phaser.Scene): void {
@@ -456,6 +566,8 @@ export function createAllTextures(scene: Phaser.Scene): void {
   makeSlash(scene);
   makeSpark(scene);
   makeHearts(scene);
+  makeElementIcons(scene);
+  makeMagicObjects(scene);
 
   const skin = '#f2c9a0';
   makeCharacter(scene, 'player', {

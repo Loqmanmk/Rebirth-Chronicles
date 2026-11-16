@@ -1,4 +1,5 @@
 import { TILE, Tile, makeRng } from '../art/textures';
+import type { SpellId } from '../magic/spells';
 
 /**
  * Willowbrook Village — the player's birthplace in the Lunaris Kingdom.
@@ -24,6 +25,8 @@ export interface VillageMap {
   spawn: { x: number; y: number };
   /** where wild slimes live */
   slimeSpawns: { x: number; y: number }[];
+  /** pedestals where the player learns a spell */
+  shrines: { spell: SpellId; x: number; y: number }[];
 }
 
 const isGrass = (t: number) =>
@@ -129,6 +132,18 @@ export function buildVillage(): VillageMap {
   npc('npc_elder', 33, 20);
   npc('npc_villager', 41, 24);
 
+  // --- element shrines: touch one to learn its spell
+  const shrines: VillageMap['shrines'] = [];
+  const shrine = (spell: SpellId, tx: number, ty: number) => {
+    shrines.push({ spell, ...at(tx, ty) });
+    reserve(tx - 1, ty - 2, tx + 1, ty + 1);
+  };
+  shrine('fire', 15, 17); // just outside your home
+  shrine('water', 50, 20); // south shore of the pond
+  shrine('wind', 31, 6); // end of the north road
+  shrine('earth', 11, 33); // deep in the south-west meadow
+  shrine('spirit', 53, 33); // deep in the south-east meadow
+
   const spawn = { x: 13 * TILE, y: 15 * TILE };
   reserve(10, 13, 16, 17);
 
@@ -190,5 +205,5 @@ export function buildVillage(): VillageMap {
   slimeZone(6, 27, 17, 38, 5); // south-west meadow
   slimeZone(48, 27, 58, 38, 4); // south-east meadow
 
-  return { ground, objects, spawn, slimeSpawns };
+  return { ground, objects, spawn, slimeSpawns, shrines };
 }

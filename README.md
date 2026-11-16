@@ -18,13 +18,15 @@ Then open http://localhost:5173
 
 - Move: arrow keys, WASD or ZQSD
 - Run: hold Shift
-- Attack: Space or J
+- Sword: Space or J
+- Cast spell: K or F
+- Choose spell: 1-5, or E for the next one
 
 ## Roadmap
 
 - [x] Step 1 — Project setup, movement, camera, first map (Willowbrook Village)
 - [x] Step 2 — Combat: sword attack, slimes, health, fainting
-- [ ] Step 3 — Magic: 5 elements, mana, spells
+- [x] Step 3 — Magic: 5 elements, mana, spell shrines
 - [ ] Step 4 — XP, levels and life stages
 - [ ] Step 5 — Dialogue with choices, NPC memory
 - [ ] Step 6 — Save / load

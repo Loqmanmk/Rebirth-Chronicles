@@ -23,6 +23,7 @@ export class Slime extends Phaser.Physics.Arcade.Sprite {
   private wanderTimer = 0;
   private wanderDir = new Phaser.Math.Vector2();
   private stunUntil = 0;
+  private slowUntil = 0;
   private barBack: Phaser.GameObjects.Rectangle;
   private barFill: Phaser.GameObjects.Rectangle;
 
@@ -58,7 +59,12 @@ export class Slime extends Phaser.Physics.Arcade.Sprite {
     this.setDepth(this.y + 6);
     this.updateBar();
 
+    if (this.slowUntil !== 0 && now >= this.slowUntil) {
+      this.slowUntil = 0;
+      this.refreshTint();
+    }
     if (now < this.stunUntil) return; // flying back after a hit
+    const slow = now < this.slowUntil ? 0.4 : 1;
 
     const toPlayer = Phaser.Math.Distance.Between(this.x, this.y, player.x, player.y);
     const playerFromHome = Phaser.Math.Distance.Between(this.home.x, this.home.y, player.x, player.y);
@@ -66,7 +72,7 @@ export class Slime extends Phaser.Physics.Arcade.Sprite {
     if (!player.dead && toPlayer < SIGHT_RANGE && playerFromHome < LEASH_RANGE) {
       // chase, moving in little hops
       const hop = 0.35 + 0.65 * Math.abs(Math.sin(now / 170));
-      this.scene.physics.moveToObject(this, player, CHASE_SPEED * hop);
+      this.scene.physics.moveToObject(this, player, CHASE_SPEED * hop * slow);
       return;
     }
 
@@ -82,22 +88,40 @@ export class Slime extends Phaser.Physics.Arcade.Sprite {
         this.wanderDir.setToPolar(Math.random() * Math.PI * 2, 1);
       }
     }
-    this.setVelocity(this.wanderDir.x * WANDER_SPEED, this.wanderDir.y * WANDER_SPEED);
+    const speed = WANDER_SPEED * slow;
+    this.setVelocity(this.wanderDir.x * speed, this.wanderDir.y * speed);
+  }
+
+  /** Move slowly for a while (water magic). */
+  slow(duration: number): void {
+    if (!this.alive) return;
+    this.slowUntil = this.scene.time.now + duration;
+    this.refreshTint();
+  }
+
+  private refreshTint(): void {
+    if (this.alive && this.scene.time.now < this.slowUntil) this.setTint(0x80b8ff);
+    else this.clearTint();
   }
 
   /** Returns true if this hit killed the slime. */
-  takeHit(damage: number, fromX: number, fromY: number): boolean {
+  takeHit(
+    damage: number,
+    fromX: number,
+    fromY: number,
+    opts: { knockback?: number; stun?: number } = {},
+  ): boolean {
     if (!this.alive) return false;
     this.hp -= damage;
 
     const push = new Phaser.Math.Vector2(this.x - fromX, this.y - fromY);
     if (push.lengthSq() === 0) push.set(0, -1);
-    push.normalize().scale(KNOCKBACK_SPEED);
+    push.normalize().scale(opts.knockback ?? KNOCKBACK_SPEED);
     this.setVelocity(push.x, push.y);
-    this.stunUntil = this.scene.time.now + STUN_TIME;
+    this.stunUntil = this.scene.time.now + (opts.stun ?? STUN_TIME);
 
     this.setTintFill(0xffffff);
-    this.scene.time.delayedCall(90, () => this.clearTint());
+    this.scene.time.delayedCall(90, () => this.refreshTint());
 
     if (this.hp > 0) return false;
     this.die();
@@ -127,6 +151,7 @@ export class Slime extends Phaser.Physics.Arcade.Sprite {
     this.hp = MAX_HP;
     this.lastHitId = -1;
     this.stunUntil = 0;
+    this.slowUntil = 0;
     this.wanderTimer = 0;
     this.scene.tweens.killTweensOf(this);
     this.clearTint();
